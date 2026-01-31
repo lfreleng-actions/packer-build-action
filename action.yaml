@@ -308,12 +308,12 @@ runs:
           fi
 
           PACKER_CMD="packer build"
-          
+
           # Extract template name from path for -only flag
           # e.g., "common-packer/templates/builder.pkr.hcl" -> "openstack.builder"
           TEMPLATE_NAME=$(basename "$TEMPLATE" .pkr.hcl)
           PACKER_CMD="$PACKER_CMD -only=openstack.$TEMPLATE_NAME"
-          
+
           PACKER_CMD="$PACKER_CMD -var-file=cloud-env.json"
           PACKER_CMD="$PACKER_CMD -var-file=$VARS_FILE"
           PACKER_CMD="$PACKER_CMD -var local_build=true"
