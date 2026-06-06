@@ -8,8 +8,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import pytest
-
 
 def test_discover_templates_finds_pkr_files():
     """Test that discover-templates.sh finds .pkr.hcl files."""
@@ -26,7 +24,7 @@ def test_discover_templates_finds_pkr_files():
             cwd=tmpdir,
             capture_output=True,
             text=True,
-            env={**os.environ, "GITHUB_OUTPUT": str(Path(tmpdir) / "output.txt")}
+            env={**os.environ, "GITHUB_OUTPUT": str(Path(tmpdir) / "output.txt")},
         )
 
         assert result.returncode == 0
@@ -42,7 +40,7 @@ def test_discover_templates_no_templates():
             cwd=tmpdir,
             capture_output=True,
             text=True,
-            env={**os.environ, "GITHUB_OUTPUT": str(Path(tmpdir) / "output.txt")}
+            env={**os.environ, "GITHUB_OUTPUT": str(Path(tmpdir) / "output.txt")},
         )
 
         assert result.returncode == 1
@@ -68,7 +66,7 @@ def test_discover_templates_finds_var_files():
             cwd=tmpdir,
             capture_output=True,
             text=True,
-            env={**os.environ, "GITHUB_OUTPUT": str(Path(tmpdir) / "output.txt")}
+            env={**os.environ, "GITHUB_OUTPUT": str(Path(tmpdir) / "output.txt")},
         )
 
         assert result.returncode == 0

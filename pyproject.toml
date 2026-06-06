@@ -44,3 +44,36 @@ python_functions = ["test_*"]
 # Note: Code coverage is disabled for this action as it primarily
 # consists of shell scripts and YAML configurations.
 # Tests validate action configurations, workflows, and script syntax.
+
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["scripts", "tests"]
+exclude = [
+    "build/",
+    "dist/",
+    "docs/",
+    ".venv/",
+    ".mypy_cache/",
+    ".pytest_cache/",
+    ".ruff_cache/",
+    "htmlcov/",
+]
+typeCheckingMode = "strict"
+reportMissingImports = "none"
+reportMissingTypeStubs = "none"
+reportUnknownParameterType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportPrivateUsage = "none"
+reportUnusedFunction = "none"
+reportUnusedVariable = "none"
+reportUnusedImport = "none"
+reportUnusedCallResult = "none"
+reportConstantRedefinition = "none"
+reportUnusedClass = "none"
+reportUntypedClassDecorator = "none"
+reportUnnecessaryIsInstance = "none"
+reportPossiblyUnboundVariable = "warning"
+reportMissingParameterType = "warning"

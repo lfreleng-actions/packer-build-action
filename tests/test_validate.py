@@ -3,12 +3,9 @@
 
 """Test validation functionality."""
 
-import os
 import subprocess
 import tempfile
 from pathlib import Path
-
-import pytest
 
 
 def test_validate_script_no_templates():
@@ -16,10 +13,7 @@ def test_validate_script_no_templates():
     with tempfile.TemporaryDirectory() as tmpdir:
         script_path = Path(__file__).parent.parent / "scripts" / "validate-packer.sh"
         result = subprocess.run(
-            [str(script_path)],
-            cwd=tmpdir,
-            capture_output=True,
-            text=True
+            [str(script_path)], cwd=tmpdir, capture_output=True, text=True
         )
 
         # Should succeed with warning when no templates found
@@ -37,16 +31,17 @@ def test_validate_script_invalid_template():
 
         script_path = Path(__file__).parent.parent / "scripts" / "validate-packer.sh"
         result = subprocess.run(
-            [str(script_path)],
-            cwd=tmpdir,
-            capture_output=True,
-            text=True
+            [str(script_path)], cwd=tmpdir, capture_output=True, text=True
         )
 
         # Should fail with syntax error
         assert result.returncode == 1
-        assert ("Init failed" in result.stdout or "Syntax invalid" in result.stdout or
-                "Failed: 1" in result.stdout or "Failed:" in result.stdout)
+        assert (
+            "Init failed" in result.stdout
+            or "Syntax invalid" in result.stdout
+            or "Failed: 1" in result.stdout
+            or "Failed:" in result.stdout
+        )
 
 
 def test_validate_script_valid_template():
@@ -56,7 +51,7 @@ def test_validate_script_valid_template():
         template_dir = Path(tmpdir) / "packer"
         template_dir.mkdir()
 
-        valid_template = '''
+        valid_template = """
 packer {
   required_version = ">= 1.10.0"
   required_plugins {
@@ -74,17 +69,18 @@ source "null" "example" {
 build {
   sources = ["source.null.example"]
 }
-'''
+"""
         (template_dir / "valid.pkr.hcl").write_text(valid_template)
 
         script_path = Path(__file__).parent.parent / "scripts" / "validate-packer.sh"
         result = subprocess.run(
-            [str(script_path)],
-            cwd=tmpdir,
-            capture_output=True,
-            text=True
+            [str(script_path)], cwd=tmpdir, capture_output=True, text=True
         )
 
         # Should succeed
         assert result.returncode == 0
-        assert "✓" in result.stdout or "validations passed" in result.stdout or "Passed: 1" in result.stdout
+        assert (
+            "✓" in result.stdout
+            or "validations passed" in result.stdout
+            or "Passed: 1" in result.stdout
+        )

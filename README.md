@@ -1,10 +1,20 @@
+<!--
+SPDX-License-Identifier: Apache-2.0
+SPDX-FileCopyrightText: 2025 The Linux Foundation
+-->
+
 # Packer Build Action
+
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable-next-line MD013 -->
+[![Linux Foundation](https://img.shields.io/badge/Linux-Foundation-blue)](https://linuxfoundation.org/) [![Source Code](https://img.shields.io/badge/GitHub-100000?logo=github&logoColor=white&color=blue)](https://github.com/askb/packer-build-action) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![pre-commit.ci status badge]][pre-commit.ci results page] [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askb/packer-build-action/badge)](https://scorecard.dev/viewer/?uri=github.com/askb/packer-build-action)
+<!-- prettier-ignore-end -->
 
 GitHub Action for validating and building OpenStack images using HashiCorp Packer through a Tailscale bastion host.
 
 ## Features
 
-- 🔍 **Validate Mode**: Syntax-only validation (no credentials required)
+- 🔍 **Validate Mode**: Syntax-level validation (no credentials required)
 - 🔨 **Build Mode**: Full image builds via Tailscale bastion host
 - 📦 **Ansible Integration**: Automatic Ansible Galaxy role installation
 - 🔄 **Auto-discovery**: Finds Packer templates and var files automatically
@@ -189,7 +199,7 @@ This repository includes test workflows for each Tailscale authentication method
 - ✅ Production-ready
 
 **Recent Fixes (2025-10-21):**
-The `openstack-bastion-action` dependency was updated with two critical fixes:
+The `openstack-bastion-action` dependency now includes two critical fixes:
 
 1. Changed `EPHEMERAL=false` - Creates persistent nodes instead of auto-removed ephemeral nodes
 2. Changed runner tags to `tag:ci` - Correct ACL permissions for GitHub Actions runner
@@ -216,7 +226,7 @@ tailscale_tags: "tag:bastion" # Required for proper ACL permissions
 
 **Workflow:** `.github/workflows/test-build-oauth-reusable.yaml` **[DISABLED]**
 
-**Status:** ❌ **This authentication method is currently not supported by the bastion action.**
+**Status:** ❌ **The bastion action does not support this authentication method.**
 
 **Reason:** The bastion VM uses cloud-init to configure Tailscale, and cloud-init cannot use OAuth directly. OAuth with reusable keys (ephemeral=false) requires direct OAuth authentication which is not possible in the cloud-init environment.
 
@@ -241,7 +251,7 @@ Error: OAuth without ephemeral keys is not supported for bastion hosts
 The bastion (cloud-init) cannot use OAuth directly.
 ```
 
-The workflow file is kept for reference but is disabled (no auto-triggers) and will always fail.
+The workflow file remains for reference but stays inactive (no auto-triggers) and will always fail.
 
 ---
 
@@ -261,7 +271,7 @@ tailscale_auth_key: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
 - `TAILSCALE_AUTH_KEY`
 
-**Note:** OAuth methods are recommended over legacy auth keys.
+**Note:** Prefer OAuth methods over legacy auth keys.
 
 ---
 
@@ -296,7 +306,7 @@ gh workflow run test-build-authkey.yaml
 | --------------- | -------- | ---------- | --------- | ------------- | ------------------- |
 | OAuth Ephemeral | ⭐⭐⭐   | Low        | ✅ Yes    | ✅ Yes        | Automatic           |
 | OAuth Reusable  | ⭐⭐     | Low        | ❌ **No** | ❌ No         | N/A (not supported) |
-| Legacy Auth Key | ⭐       | Very Low   | ✅ Yes    | ⚠️ Deprecated | Manual rotation     |
+| Legacy Auth Key | ⭐       | Low        | ✅ Yes    | ⚠️ Deprecated | Manual rotation     |
 
 ---
 
@@ -307,11 +317,11 @@ The two supported authentication methods (OAuth Ephemeral and Legacy Auth Key) r
 1. **Bastion Setup:** The bastion action sets up Tailscale on both the GitHub runner and the bastion instance
 2. **Network Join:** Both join the same Tailscale network using the chosen auth method
 3. **Packer Connection:** Packer uses `ssh_bastion_agent_auth = true` to satisfy its validation requirement
-4. **SSH Agent:** An empty SSH agent is started (required by Packer, even though not used)
+4. **SSH Agent:** Packer requires an empty SSH agent, even though nothing uses it
 5. **Tailscale Intercept:** When Packer connects, Tailscale SSH intercepts and handles authentication automatically
-6. **No Traditional Keys:** No SSH private keys, passwords, or agent keys are needed
+6. **No Traditional Keys:** Packer needs no SSH private keys, passwords, or agent keys
 
-**Key Insight:** The authentication method only affects how the runner and bastion join the Tailscale network, not how Packer connects through the bastion.
+**Key Insight:** The authentication method affects how the runner and bastion join the Tailscale network, not how Packer connects through the bastion.
 
 ---
 
@@ -362,3 +372,6 @@ For issues and questions:
 
 - GitHub Issues: [Report a bug](https://github.com/lfreleng-actions/packer-build-action/issues)
 - Documentation: [docs/](docs/)
+
+[pre-commit.ci results page]: https://results.pre-commit.ci/latest/github/askb/packer-build-action/main
+[pre-commit.ci status badge]: https://results.pre-commit.ci/badge/github/askb/packer-build-action/main.svg

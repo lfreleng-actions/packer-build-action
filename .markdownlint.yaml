@@ -1,0 +1,15 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+# Disable line length rule for code examples, tables, and long URLs
+MD013: false
+
+# Allow duplicate headings across sections
+MD024: false
+
+# Do not require language on every fenced code block
+MD040: false
+
+# Allow emphasis used as headings in places
+MD036: false

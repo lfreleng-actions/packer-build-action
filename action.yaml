@@ -4,7 +4,6 @@
 
 name: "🔨 Packer Build Action"
 description: "Execute Packer validate or build operations via a bastion host"
-author: "The Linux Foundation"
 
 branding:
   icon: 'package'
