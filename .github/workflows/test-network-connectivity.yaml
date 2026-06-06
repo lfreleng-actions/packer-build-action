@@ -23,9 +23,14 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
       - name: Setup bastion with enhanced logging
         id: bastion
-        uses: askb/tailscale-openstack-bastion-action@main
+        uses: askb/tailscale-openstack-bastion-action@0b22fabffd58072d6d376b6972da6a12edece1ab # main
         with:
           operation: setup
           tailscale_oauth_client_id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -237,7 +242,7 @@ jobs:
 
       - name: Teardown bastion
         if: always()
-        uses: askb/tailscale-openstack-bastion-action@main
+        uses: askb/tailscale-openstack-bastion-action@0b22fabffd58072d6d376b6972da6a12edece1ab # main
         with:
           operation: teardown
           bastion_name: "network-test-${{ github.run_id }}"

@@ -45,6 +45,11 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
       - name: Checkout packer-build-action
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -59,7 +64,7 @@ jobs:
 
       - name: Setup bastion
         id: bastion
-        uses: askb/tailscale-openstack-bastion-action@main
+        uses: askb/tailscale-openstack-bastion-action@0b22fabffd58072d6d376b6972da6a12edece1ab # main
         with:
           operation: setup
           tailscale_oauth_client_id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -99,7 +104,7 @@ jobs:
 
       - name: Teardown bastion
         if: always()
-        uses: askb/tailscale-openstack-bastion-action@main
+        uses: askb/tailscale-openstack-bastion-action@0b22fabffd58072d6d376b6972da6a12edece1ab # main
         with:
           operation: teardown
           bastion_name: "packer-build-test-${{ github.run_id }}"
