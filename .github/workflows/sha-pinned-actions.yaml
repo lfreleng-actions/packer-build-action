@@ -22,6 +22,6 @@ jobs:
   verify:
     name: 'Check SHA pinned actions'
     # yamllint disable-line rule:line-length
-    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-verify-github-actions.yaml@353a06e737c950cb297b3138784729ebd24e4861 # v0.2.22
+    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-verify-github-actions.yaml@9b7880d03148ac73ba5f4e32d423b322db94ebc1 # v0.3.4
     permissions:
       contents: read
