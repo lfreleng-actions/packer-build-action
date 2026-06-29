@@ -31,23 +31,59 @@ on:
       - "scripts/**"
       - "action.yaml"
       - ".github/workflows/test-build-minimal.yaml"
-  pull_request:
+  # Fork PRs cannot access OpenStack/Tailscale secrets, so this suite is
+  # shown but skipped on them by default. A maintainer can opt a fork PR
+  # in by applying the 'safe to test' label: the entry job then runs via
+  # the 'integration' environment (required reviewers), with the checkout
+  # pinned to the PR head SHA. The workflow definition is always taken
+  # from the base branch; untrusted PR code only executes after approval.
+  pull_request_target:  # zizmor: ignore[dangerous-triggers]
     branches:
       - main
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - "examples/**"
       - "scripts/**"
       - "action.yaml"
       - ".github/workflows/test-build-minimal.yaml"
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Use a per-PR key for pull_request_target runs (github.ref is the base
+  # branch ref under that event, so it would otherwise collide across PRs);
+  # fall back to github.ref for push and workflow_dispatch.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   prepare:
+    name: Prepare
+    # Runs on push, workflow_dispatch, and same-repo PRs automatically.
+    # Fork PRs run only when a maintainer adds the 'safe to test' label
+    # (otherwise the job is shown but skipped). This entry job is the
+    # approval gate; downstream jobs cannot start until it succeeds.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'push' ||
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request_target' &&
+        (github.event.pull_request.head.repo.full_name == github.repository ||
+         contains(github.event.pull_request.labels.*.name, 'safe to test'))))
+    # Gate fork-PR runs behind the 'integration' environment (required
+    # reviewers). Trusted events (push, dispatch, same-repo PRs) use the
+    # unprotected 'integration-auto' environment, which has no reviewers
+    # and runs without delay.
+    # yamllint disable-line rule:line-length
+    environment: ${{ (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository) && 'integration' || 'integration-auto' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      # dorny/paths-filter lists changed files via the API under
+      # pull_request_target; without this it can fail with HTTP 403.
+      pull-requests: read  # Required for dorny/paths-filter to list changed files
     outputs:
       has-changes: ${{ steps.check.outputs.has-changes }}
     steps:
@@ -58,6 +94,14 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # For fork PRs this is the (reviewer-approved) PR head repo and
+          # SHA; for push and same-repo events it falls back to the base
+          # repository and triggering SHA.
+          # yamllint disable-line rule:line-length
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Check for changes
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
@@ -74,13 +118,14 @@ jobs:
   test-packer-build:
     needs: prepare
     runs-on: ubuntu-latest
+    # Secrets are consumed here; declare a dedicated environment. The fork
+    # approval gate stays on the 'prepare' job (via needs), so this uses the
+    # unprotected 'integration-auto' to avoid a redundant second approval.
+    environment: integration-auto
     timeout-minutes: 45
     if: |
-      (needs.prepare.outputs.has-changes == 'true' ||
-      github.event_name == 'workflow_dispatch') &&
-      (github.event_name == 'push' ||
-      github.event.pull_request.head.repo.full_name == github.repository) &&
-      github.actor != 'dependabot[bot]'
+      needs.prepare.outputs.has-changes == 'true' ||
+      github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Harden the runner
@@ -90,13 +135,21 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # For fork PRs this is the (reviewer-approved) PR head repo and
+          # SHA; for push and same-repo events it falls back to the base
+          # repository and triggering SHA.
+          # yamllint disable-line rule:line-length
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       # ========================================
       # Step 1: Setup Bastion Host
       # ========================================
       - name: Setup OpenStack Bastion with Tailscale
         id: bastion
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@f9a42891917447909c6f52dadf025d6c4187d729 # main
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@8b215efdc8161157b7cdc717e2db6028e158d66b # v0.1.0
         with:
           operation: setup
           tailscale_oauth_client_id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -137,7 +190,7 @@ jobs:
       # ========================================
       - name: Teardown Bastion Host
         if: always()
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@f9a42891917447909c6f52dadf025d6c4187d729 # main
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@8b215efdc8161157b7cdc717e2db6028e158d66b # v0.1.0
         with:
           operation: teardown
           bastion_name: "packer-test-${{ github.run_id }}"
@@ -148,7 +201,16 @@ jobs:
           openstack_region: ${{ secrets.OPENSTACK_REGION }}
 
   summary:
-    if: always()
+    # Always run (to summarise results) but only for trusted events and
+    # labeled fork PRs; unlabeled fork PRs skip the whole workflow.
+    if: >-
+      always() &&
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'push' ||
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request_target' &&
+        (github.event.pull_request.head.repo.full_name == github.repository ||
+         contains(github.event.pull_request.labels.*.name, 'safe to test'))))
     needs: [prepare, test-packer-build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -159,19 +221,27 @@ jobs:
           egress-policy: audit
 
       - name: Build summary
+        env:
+          WORKFLOW_NAME: "${{ github.workflow }}"
+          RUN_ID: "${{ github.run_id }}"
+          EVENT_NAME: "${{ github.event_name }}"
+          REF_NAME: "${{ github.ref_name }}"
+          BUILD_RESULT: "${{ needs.test-packer-build.result }}"
         run: |
           {
             echo "## Packer Build Test Summary"
             echo ""
-            echo "- **Workflow:** ${{ github.workflow }}"
-            echo "- **Run ID:** ${{ github.run_id }}"
-            echo "- **Trigger:** ${{ github.event_name }}"
-            echo "- **Branch:** ${{ github.ref_name }}"
+            echo "- **Workflow:** $WORKFLOW_NAME"
+            echo "- **Run ID:** $RUN_ID"
+            echo "- **Trigger:** $EVENT_NAME"
+            echo "- **Branch:** $REF_NAME"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${{ needs.test-packer-build.result }}" == "success" ]; then
+          if [ "$BUILD_RESULT" == "success" ]; then
             echo "✅ **Build Status:** Success" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$BUILD_RESULT" == "skipped" ]; then
+            echo "⏭️ **Build Status:** Skipped (no relevant changes)" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "❌ **Build Status:** Failed" >> "$GITHUB_STEP_SUMMARY"
           fi

@@ -32,11 +32,13 @@ jobs:
       - name: Checkout packer-build-action
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           path: action-repo
 
       - name: Checkout test repository with Packer templates
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           repository: lfit/releng-common-packer
           path: target-repo
           submodules: recursive

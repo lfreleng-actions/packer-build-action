@@ -125,10 +125,52 @@ runs:
   steps:
     - name: Validate inputs and install dependencies
       shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        BASTION_IP: ${{ inputs.bastion_ip }}
+        PATH_PREFIX: ${{ inputs.path_prefix }}
+        PACKER_WORKING_DIR: ${{ inputs.packer_working_dir }}
       run: |
-        if [[ "${{ inputs.mode }}" == "build" && -z "${{ inputs.bastion_ip }}" ]]; then
+        set -euo pipefail
+
+        if [[ "$MODE" == "build" && -z "$BASTION_IP" ]]; then
           echo "❌ Error: bastion_ip is required for build mode"
           exit 1
+        fi
+
+        # Reject absolute paths or '..' traversal in the directory inputs so
+        # later 'working-directory' values cannot escape the workspace.
+        for path_input in "$PATH_PREFIX" "$PACKER_WORKING_DIR"; do
+          if [[ -z "$path_input" ]]; then
+            echo "❌ Error: path inputs must not be empty (use '.' for the workspace root)"
+            exit 1
+          fi
+          if [[ "$path_input" == /* ]]; then
+            echo "❌ Error: path inputs must be relative, got '$path_input'"
+            exit 1
+          fi
+          if [[ "$path_input" == ".." || "$path_input" == "../"* \
+                || "$path_input" == *"/.." || "$path_input" == *"/../"* ]]; then
+            echo "❌ Error: path inputs must not contain '..', got '$path_input'"
+            exit 1
+          fi
+        done
+
+        # Defence in depth: resolve the combined working directory and make
+        # sure that, after dereferencing any symlinks, it still lives inside
+        # the workspace. This blocks an in-repo symlink that points outside
+        # $GITHUB_WORKSPACE.
+        WORKSPACE_REAL=$(realpath -- "${GITHUB_WORKSPACE:-$PWD}")
+        COMBINED="$PATH_PREFIX/$PACKER_WORKING_DIR"
+        if [[ -e "$COMBINED" ]]; then
+          RESOLVED=$(realpath -- "$COMBINED")
+          case "$RESOLVED" in
+            "$WORKSPACE_REAL" | "$WORKSPACE_REAL"/*) : ;;
+            *)
+              echo "❌ Error: resolved working directory '$RESOLVED' escapes the workspace"
+              exit 1
+              ;;
+          esac
         fi
 
         # Install jq if not available (needed for cloud-env.json generation)
@@ -152,16 +194,20 @@ runs:
 
     - name: Install Ansible and dependencies
       shell: bash
+      env:
+        ANSIBLE_VERSION: ${{ inputs.ansible_version }}
       run: |
-        echo "📦 Installing Ansible ${{ inputs.ansible_version }}..."
+        set -euo pipefail
+        echo "📦 Installing Ansible ${ANSIBLE_VERSION}..."
         pip install --upgrade pip
-        pip install ansible==${{ inputs.ansible_version }} jinja2
+        pip install "ansible==${ANSIBLE_VERSION}" jinja2
         ansible --version
 
     - name: Install Ansible Galaxy roles
       shell: bash
       working-directory: ${{ inputs.path_prefix }}/${{ inputs.packer_working_dir }}
       run: |
+        set -euo pipefail
         if [[ -f "common-packer/requirements.yaml" ]]; then
           echo "📦 Installing Ansible Galaxy roles..."
           ansible-galaxy role install -r common-packer/requirements.yaml -p common-packer/roles
@@ -175,30 +221,61 @@ runs:
     - name: Setup cloud configuration
       shell: bash
       working-directory: ${{ inputs.path_prefix }}/${{ inputs.packer_working_dir }}
+      env:
+        CLOUD_ENV_JSON: ${{ inputs.cloud_env_json }}
+        CLOUDS_YAML: ${{ inputs.clouds_yaml }}
+        OPENSTACK_AUTH_URL: ${{ inputs.openstack_auth_url }}
+        OPENSTACK_PROJECT_ID: ${{ inputs.openstack_project_id }}
+        OPENSTACK_USERNAME: ${{ inputs.openstack_username }}
+        OPENSTACK_PASSWORD: ${{ inputs.openstack_password }}
+        OPENSTACK_REGION: ${{ inputs.openstack_region }}
+        OPENSTACK_NETWORK_ID: ${{ inputs.openstack_network_id }}
+        OPENSTACK_DOMAIN_NAME: ${{ inputs.openstack_domain_name }}
+        OS_CLOUD_NAME: ${{ inputs.os_cloud }}
       run: |
         set -euo pipefail
-        # Create cloud-env.json if not provided
-        if [[ -n "${{ inputs.cloud_env_json }}" ]]; then
-          echo "${{ inputs.cloud_env_json }}" | base64 -d > cloud-env.json
-        elif [[ -n "${{ inputs.openstack_auth_url }}" ]]; then
-          # Decode password - it's expected to be base64 encoded
-          # Try to decode, if it fails, use as-is
-          if DECODED_PASSWORD=$(printf '%s' "${{ inputs.openstack_password }}" | base64 -d 2>/dev/null); then
-            echo "✅ Password decoded from base64"
+
+        # Credential files (cloud-env.json, clouds.yaml) are written below;
+        # restrict the umask so they are created owner-only (0600), never
+        # world-readable on the runner.
+        umask 077
+
+        # Conservatively decode a possibly-base64 secret: only treat it as
+        # base64 when it decodes cleanly into valid UTF-8 text with no control
+        # characters (other than ordinary whitespace). This avoids corrupting a
+        # plain-text password that merely happens to be valid base64 (e.g. a
+        # short alphanumeric string), while still accepting non-ASCII/multibyte
+        # passwords. iconv rejects byte sequences that are not valid UTF-8, and
+        # the UTF-8 locale lets grep treat multibyte characters as printable.
+        decode_if_base64() {
+          local value="$1" decoded
+          if decoded=$(printf '%s' "$value" | base64 -d 2>/dev/null) \
+              && [[ -n "$decoded" ]] \
+              && printf '%s' "$decoded" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1 \
+              && ! printf '%s' "$decoded" | LC_ALL=C.UTF-8 grep -q '[^[:print:][:space:]]'; then
+            printf '%s' "$decoded"
           else
-            DECODED_PASSWORD="${{ inputs.openstack_password }}"
-            echo "ℹ️  Using password as-is (not base64 encoded)"
+            printf '%s' "$value"
           fi
+        }
+
+        # Create cloud-env.json if not provided
+        if [[ -n "$CLOUD_ENV_JSON" ]]; then
+          printf '%s' "$CLOUD_ENV_JSON" | base64 -d > cloud-env.json
+          chmod 600 cloud-env.json
+        elif [[ -n "$OPENSTACK_AUTH_URL" ]]; then
+          # Decode the password only when it is base64-encoded text
+          DECODED_PASSWORD=$(decode_if_base64 "$OPENSTACK_PASSWORD")
 
           # Create cloud-env.json using jq to properly escape special characters
           jq -n \
-            --arg auth_url "${{ inputs.openstack_auth_url }}" \
-            --arg tenant "${{ inputs.openstack_project_id }}" \
-            --arg domain "${{ inputs.openstack_domain_name }}" \
-            --arg username "${{ inputs.openstack_username }}" \
+            --arg auth_url "$OPENSTACK_AUTH_URL" \
+            --arg tenant "$OPENSTACK_PROJECT_ID" \
+            --arg domain "$OPENSTACK_DOMAIN_NAME" \
+            --arg username "$OPENSTACK_USERNAME" \
             --arg password "${DECODED_PASSWORD}" \
-            --arg region "${{ inputs.openstack_region }}" \
-            --arg network "${{ inputs.openstack_network_id }}" \
+            --arg region "$OPENSTACK_REGION" \
+            --arg network "$OPENSTACK_NETWORK_ID" \
             '{
               cloud_auth_url: $auth_url,
               cloud_tenant_name: $tenant,
@@ -208,48 +285,54 @@ runs:
               cloud_region: $region,
               cloud_network: $network
             }' > cloud-env.json
+          chmod 600 cloud-env.json
 
           echo "✅ Created cloud-env.json configuration"
         fi
 
         # Create clouds.yaml if provided or generate from credentials
-        if [[ -n "${{ inputs.clouds_yaml }}" ]]; then
+        if [[ -n "$CLOUDS_YAML" ]]; then
           mkdir -p "$HOME/.config/openstack"
-          echo "${{ inputs.clouds_yaml }}" | base64 -d > "$HOME/.config/openstack/clouds.yaml"
+          printf '%s' "$CLOUDS_YAML" | base64 -d > "$HOME/.config/openstack/clouds.yaml"
+          chmod 600 "$HOME/.config/openstack/clouds.yaml"
           echo "✅ OpenStack clouds.yaml created from base64 input"
-        elif [[ -n "${{ inputs.os_cloud }}" ]] && [[ -n "${{ inputs.openstack_auth_url }}" ]]; then
-          # Auto-generate clouds.yaml from OpenStack credentials
+        elif [[ -n "$OS_CLOUD_NAME" ]] && [[ -n "$OPENSTACK_AUTH_URL" ]]; then
+          # Auto-generate clouds.yaml from OpenStack credentials. Emit the
+          # document as JSON via jq (JSON is valid YAML 1.2) so every value
+          # and the cloud key are correctly escaped regardless of any
+          # YAML-significant characters they may contain.
           mkdir -p "$HOME/.config/openstack"
 
-          # Decode password if it's base64 encoded
-          password="${{ inputs.openstack_password }}"
-          if printf '%s' "$password" | base64 -d &> /dev/null; then
-            password=$(printf '%s' "$password" | base64 -d)
-          fi
+          # Decode the password only when it is base64-encoded text
+          password=$(decode_if_base64 "$OPENSTACK_PASSWORD")
 
-          cat > "$HOME/.config/openstack/clouds.yaml" << EOF
-        clouds:
-          ${{ inputs.os_cloud }}:
-            auth:
-              auth_url: ${{ inputs.openstack_auth_url }}
-              username: ${{ inputs.openstack_username }}
-              password: $password
-              project_id: ${{ inputs.openstack_project_id }}
-              user_domain_name: ${{ inputs.openstack_domain_name }}
-              project_domain_name: ${{ inputs.openstack_domain_name }}
-            region_name: ${{ inputs.openstack_region }}
-        EOF
-          echo "✅ Auto-generated clouds.yaml for cloud: ${{ inputs.os_cloud }}"
+          jq -n \
+            --arg cloud "$OS_CLOUD_NAME" \
+            --arg auth_url "$OPENSTACK_AUTH_URL" \
+            --arg username "$OPENSTACK_USERNAME" \
+            --arg password "$password" \
+            --arg project_id "$OPENSTACK_PROJECT_ID" \
+            --arg domain "$OPENSTACK_DOMAIN_NAME" \
+            --arg region "$OPENSTACK_REGION" \
+            '{clouds: {($cloud): {auth: {auth_url: $auth_url,
+              username: $username, password: $password,
+              project_id: $project_id, user_domain_name: $domain,
+              project_domain_name: $domain}, region_name: $region}}}' \
+            > "$HOME/.config/openstack/clouds.yaml"
+          chmod 600 "$HOME/.config/openstack/clouds.yaml"
+          echo "✅ Auto-generated clouds.yaml for cloud: ${OS_CLOUD_NAME}"
         fi
 
     - name: Initialize Packer plugins
       shell: bash
       working-directory: ${{ inputs.path_prefix }}/${{ inputs.packer_working_dir }}
+      env:
+        PACKER_TEMPLATE: ${{ inputs.packer_template }}
       run: |
-        set -e
+        set -euo pipefail
         echo "🔌 Initializing Packer plugins..."
 
-        TEMPLATE="${{ inputs.packer_template }}"
+        TEMPLATE="$PACKER_TEMPLATE"
         if [[ -n "$TEMPLATE" ]]; then
           # Extract template name for selective plugin initialization
           TEMPLATE_NAME=$(basename "$TEMPLATE" .pkr.hcl)
@@ -270,21 +353,26 @@ runs:
       working-directory: ${{ inputs.path_prefix }}/${{ inputs.packer_working_dir }}
       env:
         OS_CLOUD: ${{ inputs.os_cloud }}
+        MODE: ${{ inputs.mode }}
+        PACKER_TEMPLATE: ${{ inputs.packer_template }}
+        PACKER_VARS_FILE: ${{ inputs.packer_vars_file }}
+        BASTION_IP: ${{ inputs.bastion_ip }}
+        BASTION_SSH_USER: ${{ inputs.bastion_ssh_user }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
+        set -euo pipefail
+
         # Start SSH agent for Packer (required even for Tailscale SSH)
         # Packer requires ssh_bastion_agent_auth to be true, so we need an agent running
         # Tailscale SSH will handle actual authentication, agent can be empty
-        if [[ "${{ inputs.mode }}" == "build" ]]; then
+        if [[ "$MODE" == "build" ]]; then
           eval "$(ssh-agent -s)"
           export SSH_AUTH_SOCK SSH_AGENT_PID
           echo "✅ SSH agent started for Packer (PID: $SSH_AGENT_PID)"
         fi
 
-        set -e
-
-        MODE="${{ inputs.mode }}"
-        TEMPLATE="${{ inputs.packer_template }}"
-        VARS_FILE="${{ inputs.packer_vars_file }}"
+        TEMPLATE="$PACKER_TEMPLATE"
+        VARS_FILE="$PACKER_VARS_FILE"
 
         # Ensure provision directory is accessible
         # Check if provision exists in examples and symlink to current dir
@@ -295,8 +383,8 @@ runs:
 
         if [[ "$MODE" == "validate" ]]; then
           echo "🔍 Running Packer validation..."
-          ${{ github.action_path }}/scripts/validate-packer.sh
-          echo "validation_result=success" >> $GITHUB_OUTPUT
+          "$ACTION_PATH/scripts/validate-packer.sh"
+          echo "validation_result=success" >> "$GITHUB_OUTPUT"
         elif [[ "$MODE" == "build" ]]; then
           echo "🔨 Running Packer build..."
 
@@ -306,28 +394,37 @@ runs:
             exit 1
           fi
 
-          PACKER_CMD="packer build"
+          PACKER_CMD=(packer build)
 
           # Extract template name from path for -only flag
           # e.g., "common-packer/templates/builder.pkr.hcl" -> "openstack.builder"
           TEMPLATE_NAME=$(basename "$TEMPLATE" .pkr.hcl)
-          PACKER_CMD="$PACKER_CMD -only=openstack.$TEMPLATE_NAME"
+          PACKER_CMD+=("-only=openstack.${TEMPLATE_NAME}")
 
-          PACKER_CMD="$PACKER_CMD -var-file=cloud-env.json"
-          PACKER_CMD="$PACKER_CMD -var-file=$VARS_FILE"
-          PACKER_CMD="$PACKER_CMD -var local_build=true"
-          if [[ -n "${{ inputs.bastion_ip }}" ]]; then
-            PACKER_CMD="$PACKER_CMD -var ssh_bastion_host=${{ inputs.bastion_ip }}"
-            PACKER_CMD="$PACKER_CMD -var ssh_bastion_username=${{ inputs.bastion_ssh_user }}"
-            PACKER_CMD="$PACKER_CMD -var ssh_bastion_agent_auth=true"
+          PACKER_CMD+=(-var-file=cloud-env.json)
+          PACKER_CMD+=("-var-file=${VARS_FILE}")
+          PACKER_CMD+=(-var local_build=true)
+          if [[ -n "$BASTION_IP" ]]; then
+            PACKER_CMD+=(-var "ssh_bastion_host=${BASTION_IP}")
+            PACKER_CMD+=(-var "ssh_bastion_username=${BASTION_SSH_USER}")
+            PACKER_CMD+=(-var ssh_bastion_agent_auth=true)
           fi
-          PACKER_CMD="$PACKER_CMD $TEMPLATE"
+          # Pass the template as the final positional argument. Prefix a
+          # relative path with './' so a value that happens to start with
+          # '-' is never mistaken for a Packer flag.
+          SAFE_TEMPLATE="$TEMPLATE"
+          if [[ "$SAFE_TEMPLATE" != /* ]]; then
+            SAFE_TEMPLATE="./$SAFE_TEMPLATE"
+          fi
+          PACKER_CMD+=("$SAFE_TEMPLATE")
 
-          echo "Executing: $PACKER_CMD"
-          eval $PACKER_CMD
+          # Execute as an argument array (no eval) so values containing
+          # spaces or shell metacharacters cannot be reinterpreted.
+          printf 'Executing: %s\n' "${PACKER_CMD[*]}"
+          "${PACKER_CMD[@]}"
 
-          echo "build_status=success" >> $GITHUB_OUTPUT
-          echo "image_name=Built successfully" >> $GITHUB_OUTPUT
+          echo "build_status=success" >> "$GITHUB_OUTPUT"
+          echo "image_name=Built successfully" >> "$GITHUB_OUTPUT"
         else
           echo "❌ Error: Invalid mode '$MODE'"
           exit 1

@@ -51,6 +51,9 @@ on:
   #     - "action.yaml"
   #     - ".github/workflows/test-build-oauth-reusable.yaml"
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -69,6 +72,8 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Check for changes
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
@@ -88,6 +93,11 @@ jobs:
       needs.prepare.outputs.has-changes == 'true' ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Secrets are consumed here; declare a dedicated environment. This
+    # workflow is workflow_dispatch-only (manually triggered by a
+    # maintainer), so it uses the unprotected 'integration-auto'
+    # environment; no fork-PR approval gate applies here.
+    environment: integration-auto
     timeout-minutes: 45
 
     steps:
@@ -98,13 +108,15 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       # ========================================
       # Step 1: Setup Bastion with OAuth Reusable Keys
       # ========================================
       - name: Setup OpenStack Bastion with Tailscale (OAuth Reusable)
         id: bastion
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@f9a42891917447909c6f52dadf025d6c4187d729 # main
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@8b215efdc8161157b7cdc717e2db6028e158d66b # v0.1.0
         with:
           operation: setup
           tailscale_oauth_client_id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -147,7 +159,7 @@ jobs:
       # ========================================
       - name: Teardown Bastion Host
         if: always()
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@f9a42891917447909c6f52dadf025d6c4187d729 # main
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@8b215efdc8161157b7cdc717e2db6028e158d66b # v0.1.0
         with:
           operation: teardown
           bastion_name: "packer-oauth-reuse-${{ github.run_id }}"
@@ -169,22 +181,28 @@ jobs:
           egress-policy: audit
 
       - name: Build summary
+        env:
+          WORKFLOW_NAME: "${{ github.workflow }}"
+          RUN_ID: "${{ github.run_id }}"
+          EVENT_NAME: "${{ github.event_name }}"
+          REF_NAME: "${{ github.ref_name }}"
+          BUILD_RESULT: "${{ needs.test-packer-build.result }}"
         run: |
           {
             echo "## Packer Build Test Summary - OAuth Reusable Keys"
             echo ""
             echo "**Authentication Method:** OAuth with Reusable Keys"
             echo ""
-            echo "- **Workflow:** ${{ github.workflow }}"
-            echo "- **Run ID:** ${{ github.run_id }}"
-            echo "- **Trigger:** ${{ github.event_name }}"
-            echo "- **Branch:** ${{ github.ref_name }}"
+            echo "- **Workflow:** $WORKFLOW_NAME"
+            echo "- **Run ID:** $RUN_ID"
+            echo "- **Trigger:** $EVENT_NAME"
+            echo "- **Branch:** $REF_NAME"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${{ needs.test-packer-build.result }}" == "success" ]; then
+          if [ "$BUILD_RESULT" == "success" ]; then
             echo "✅ **Build Status:** Success" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.test-packer-build.result }}" == "skipped" ]; then
+          elif [ "$BUILD_RESULT" == "skipped" ]; then
             echo "⏭️ **Build Status:** Skipped (no relevant changes)" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "❌ **Build Status:** Failed" >> "$GITHUB_STEP_SUMMARY"

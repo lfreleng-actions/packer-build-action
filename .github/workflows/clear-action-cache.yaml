@@ -46,8 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      # Actions cache deletion requires the actions: write scope.
-      actions: write
+      actions: write  # Required to delete the repository's Actions caches.
     steps:
       # Harden the runner
       # yamllint disable-line rule:line-length
@@ -61,11 +60,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           KEY_PATTERN: ${{ inputs.key_pattern }}
           REF_FILTER: ${{ inputs.ref_filter }}
+          REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           # List current cache entries (pre-deletion snapshot).
           set -euo pipefail
 
-          echo "Repository: ${{ github.repository }}"
+          echo "Repository: ${REPOSITORY}"
           echo "Key filter: '${KEY_PATTERN:-<none>}'"
           echo "Ref filter: '${REF_FILTER:-<none>}'"
           echo ""
@@ -77,7 +78,7 @@ jobs:
             gh api \
               --paginate \
               -H "Accept: application/vnd.github+json" \
-              "/repos/${{ github.repository }}/actions/caches?per_page=100" \
+              "/repos/${REPOSITORY}/actions/caches?per_page=100" \
               --jq '.actions_caches[]'
           )
 
@@ -130,7 +131,7 @@ jobs:
             echo "|----------|-------|"
             echo "| Total entries | $before_count |"
             echo "| Matched | $matched_count |"
-            echo "| Dry run | \`${{ inputs.dry_run }}\` |"
+            echo "| Dry run | \`${DRY_RUN}\` |"
             echo ""
             # Render user-controlled filter inputs inside a fenced
             # code block. KEY_PATTERN and REF_FILTER are free-form
@@ -174,6 +175,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ inputs.dry_run }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           # Delete the matched cache IDs unless this is a dry run.
           set -euo pipefail
@@ -205,7 +207,7 @@ jobs:
             if gh api \
                 --method DELETE \
                 -H "Accept: application/vnd.github+json" \
-                "/repos/${{ github.repository }}/actions/caches/${cache_id}";
+                "/repos/${REPOSITORY}/actions/caches/${cache_id}";
             then
               deleted=$((deleted + 1))
             else
@@ -241,6 +243,7 @@ jobs:
           KEY_PATTERN: ${{ inputs.key_pattern }}
           REF_FILTER: ${{ inputs.ref_filter }}
           DRY_RUN: ${{ inputs.dry_run }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           # Re-query the cache list and confirm matched entries are
           # gone (or still present in dry-run mode).
@@ -250,7 +253,7 @@ jobs:
             gh api \
               --paginate \
               -H "Accept: application/vnd.github+json" \
-              "/repos/${{ github.repository }}/actions/caches?per_page=100" \
+              "/repos/${REPOSITORY}/actions/caches?per_page=100" \
               --jq '.actions_caches[]'
           )
 

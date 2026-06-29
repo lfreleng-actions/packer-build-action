@@ -16,10 +16,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   network-diagnostics:
     name: Tailscale Network Connectivity Test
     runs-on: ubuntu-latest
+    # Secrets are consumed here; declare a dedicated environment. This
+    # workflow is workflow_dispatch-only (manually triggered by a
+    # maintainer), so it uses the unprotected 'integration-auto'
+    # environment; no fork-PR approval gate applies here.
+    environment: integration-auto
     timeout-minutes: 45
 
     steps:
@@ -30,7 +39,7 @@ jobs:
 
       - name: Setup bastion with enhanced logging
         id: bastion
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@f9a42891917447909c6f52dadf025d6c4187d729 # main
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@8b215efdc8161157b7cdc717e2db6028e158d66b # v0.1.0
         with:
           operation: setup
           tailscale_oauth_client_id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -50,6 +59,9 @@ jobs:
       - name: Comprehensive Network Diagnostics
         id: diagnostics
         continue-on-error: true
+        env:
+          KEEP_BASTION_ALIVE: "${{ github.event.inputs.keep_bastion_alive || '30' }}"
+          RUN_ID: ${{ github.run_id }}
         run: |
           set +e  # Don't exit on errors, we want to collect all diagnostics
 
@@ -59,7 +71,7 @@ jobs:
           echo ""
 
           BASTION_IP="${{ steps.bastion.outputs.bastion_ip }}"
-          BASTION_NAME="network-test-${{ github.run_id }}"
+          BASTION_NAME="network-test-${RUN_ID}"
 
           echo "📋 Configuration:"
           echo "  Bastion IP: $BASTION_IP"
@@ -194,11 +206,11 @@ jobs:
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "⏰ Keeping bastion alive for ${{ github.event.inputs.keep_bastion_alive || '30' }} minutes for manual inspection..."
+          echo "⏰ Keeping bastion alive for ${KEEP_BASTION_ALIVE} minutes for manual inspection..."
           echo ""
           echo "📋 To check bastion console logs in OpenStack:"
           echo "   1. Go to OpenStack dashboard"
-          echo "   2. Find instance: network-test-${{ github.run_id }}"
+          echo "   2. Find instance: network-test-${RUN_ID}"
           echo "   3. View Console Log"
           echo ""
           echo "📋 Bastion should have cloud-init logs showing:"
@@ -208,8 +220,13 @@ jobs:
           echo "   - SSH service status"
           echo ""
 
-          # Keep alive for manual debugging
-          WAIT_MINUTES=${{ github.event.inputs.keep_bastion_alive || '30' }}
+          # Keep alive for manual debugging. The env default supplies 30
+          # when no dispatch input is given; treat any non-numeric value
+          # as 0 so the arithmetic comparison stays well-defined.
+          WAIT_MINUTES="${KEEP_BASTION_ALIVE}"
+          if ! printf '%s' "$WAIT_MINUTES" | grep -Eq '^[0-9]+$'; then
+            WAIT_MINUTES=0
+          fi
           if [ "$WAIT_MINUTES" -gt 0 ]; then
             echo "Waiting ${WAIT_MINUTES} minutes before teardown..."
             sleep $((WAIT_MINUTES * 60))
@@ -217,14 +234,22 @@ jobs:
 
       - name: Get bastion details for manual inspection
         if: always()
+        env:
+          RUN_ID: ${{ github.run_id }}
+          OS_PASSWORD_B64: ${{ secrets.OPENSTACK_PASSWORD_B64 }}
+          OS_AUTH_URL_SECRET: ${{ secrets.OPENSTACK_AUTH_URL }}
+          OS_PROJECT_ID_SECRET: ${{ secrets.OPENSTACK_PROJECT_ID }}
+          OS_USERNAME_SECRET: ${{ secrets.OPENSTACK_USERNAME }}
+          OS_REGION_SECRET: ${{ secrets.OPENSTACK_REGION }}
         run: |
-          DECODED_PASSWORD=$(echo "${{ secrets.OPENSTACK_PASSWORD_B64 }}" | base64 -d)
+          set -euo pipefail
+          DECODED_PASSWORD=$(printf '%s' "${OS_PASSWORD_B64}" | base64 -d)
 
-          export OS_AUTH_URL="${{ secrets.OPENSTACK_AUTH_URL }}"
-          export OS_PROJECT_ID="${{ secrets.OPENSTACK_PROJECT_ID }}"
-          export OS_USERNAME="${{ secrets.OPENSTACK_USERNAME }}"
+          export OS_AUTH_URL="${OS_AUTH_URL_SECRET}"
+          export OS_PROJECT_ID="${OS_PROJECT_ID_SECRET}"
+          export OS_USERNAME="${OS_USERNAME_SECRET}"
           export OS_PASSWORD="$DECODED_PASSWORD"
-          export OS_REGION_NAME="${{ secrets.OPENSTACK_REGION }}"
+          export OS_REGION_NAME="${OS_REGION_SECRET}"
           export OS_IDENTITY_API_VERSION=3
 
           pip3 install -q python-openstackclient
@@ -232,17 +257,17 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📋 Bastion Instance Details"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          openstack server show "network-test-${{ github.run_id }}" || echo "Instance not found"
+          openstack server show "network-test-${RUN_ID}" || echo "Instance not found"
           echo ""
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📋 Bastion Console Log (last 100 lines)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          openstack console log show "network-test-${{ github.run_id }}" | tail -100 || echo "No console log available"
+          openstack console log show "network-test-${RUN_ID}" | tail -100 || echo "No console log available"
 
       - name: Teardown bastion
         if: always()
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@f9a42891917447909c6f52dadf025d6c4187d729 # main
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@8b215efdc8161157b7cdc717e2db6028e158d66b # v0.1.0
         with:
           operation: teardown
           bastion_name: "network-test-${{ github.run_id }}"
@@ -254,13 +279,16 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          KEEP_BASTION_ALIVE: "${{ github.event.inputs.keep_bastion_alive || '30' }}"
+          RUN_ID: ${{ github.run_id }}
         run: |
           {
             echo "## Network Connectivity Diagnostics Results"
             echo ""
             echo "### Configuration"
             echo "- **Bastion IP**: ${{ steps.diagnostics.outputs.bastion_ip || 'unknown' }}"
-            echo "- **Bastion Name**: network-test-${{ github.run_id }}"
+            echo "- **Bastion Name**: network-test-${RUN_ID}"
             echo ""
             echo "### Test Results"
             if [[ "${{ steps.diagnostics.outputs.ping_ok }}" == "true" ]]; then
@@ -286,6 +314,6 @@ jobs:
             fi
             echo ""
             echo "### Manual Inspection"
-            echo "The bastion instance was kept alive for ${{ github.event.inputs.keep_bastion_alive || '30' }} minutes."
-            echo "Check OpenStack console for instance: \`network-test-${{ github.run_id }}\`"
+            echo "The bastion instance was kept alive for ${KEEP_BASTION_ALIVE} minutes."
+            echo "Check OpenStack console for instance: \`network-test-${RUN_ID}\`"
           } >> "${GITHUB_STEP_SUMMARY}"

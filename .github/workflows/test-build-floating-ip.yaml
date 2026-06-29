@@ -12,9 +12,16 @@ on:
       - "action.yaml"
       - "examples/**"
       - ".github/workflows/test-build-floating-ip.yaml"
-  pull_request:
+  # Fork PRs cannot access OpenStack/Tailscale secrets, so this suite is
+  # shown but skipped on them by default. A maintainer can opt a fork PR
+  # in by applying the 'safe to test' label: the entry job then runs via
+  # the 'integration' environment (required reviewers), with the checkout
+  # pinned to the PR head SHA. The workflow definition is always taken
+  # from the base branch; untrusted PR code only executes after approval.
+  pull_request_target:  # zizmor: ignore[dangerous-triggers]
     branches:
       - main
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - "action.yaml"
       - "examples/**"
@@ -34,19 +41,31 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Use a per-PR key for pull_request_target runs (github.ref is the base
+  # branch ref under that event, so it would otherwise collide across PRs);
+  # fall back to github.ref for push and workflow_dispatch.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   integration-test-floating-ip:
     name: Integration Test - Build with Floating IP
-    # Skip on fork PRs (no access to OpenStack/Tailscale secrets); still
-    # runs on push to the default branch, workflow_dispatch, and
-    # same-repo PRs where secrets are available.
+    # Runs on push, workflow_dispatch, and same-repo PRs automatically.
+    # Fork PRs run only when a maintainer adds the 'safe to test' label
+    # (otherwise the job is shown but skipped).
     if: >-
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'push' ||
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request_target' &&
+        (github.event.pull_request.head.repo.full_name == github.repository ||
+         contains(github.event.pull_request.labels.*.name, 'safe to test'))))
+    # Gate fork-PR runs behind the 'integration' environment (required
+    # reviewers). Trusted events (push, dispatch, same-repo PRs) use the
+    # unprotected 'integration-auto' environment, which has no reviewers
+    # and runs without delay.
+    # yamllint disable-line rule:line-length
+    environment: ${{ (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository) && 'integration' || 'integration-auto' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -59,7 +78,14 @@ jobs:
       - name: Checkout packer-build-action
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          # For fork PRs this is the (reviewer-approved) PR head repo and
+          # SHA; for push and same-repo events it falls back to the base
+          # repository and triggering SHA.
+          # yamllint disable-line rule:line-length
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: action-repo
+          persist-credentials: false
 
       - name: Checkout test repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -68,6 +94,7 @@ jobs:
           ref: master
           path: target-repo
           submodules: recursive
+          persist-credentials: false
 
       - name: Build with Packer (Floating IP mode)
         id: build
