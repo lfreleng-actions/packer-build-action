@@ -27,14 +27,14 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
-    "pytest>=7.4.0",
+    "pytest>=9.0.3",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.11.1",
     "PyYAML>=6.0",
 ]
 
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "9.0.3"
 addopts = "-ra -q --strict-markers"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
