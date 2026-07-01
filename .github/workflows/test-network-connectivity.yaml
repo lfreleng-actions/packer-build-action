@@ -62,6 +62,7 @@ jobs:
         env:
           KEEP_BASTION_ALIVE: "${{ github.event.inputs.keep_bastion_alive || '30' }}"
           RUN_ID: ${{ github.run_id }}
+          STEPS_BASTION_OUTPUTS_BASTION_IP: ${{ steps.bastion.outputs.bastion_ip }}
         run: |
           set +e  # Don't exit on errors, we want to collect all diagnostics
 
@@ -70,7 +71,7 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
 
-          BASTION_IP="${{ steps.bastion.outputs.bastion_ip }}"
+          BASTION_IP="${STEPS_BASTION_OUTPUTS_BASTION_IP}"
           BASTION_NAME="network-test-${RUN_ID}"
 
           echo "📋 Configuration:"
@@ -282,29 +283,33 @@ jobs:
         env:
           KEEP_BASTION_ALIVE: "${{ github.event.inputs.keep_bastion_alive || '30' }}"
           RUN_ID: ${{ github.run_id }}
+          STEPS_DIAGNOSTICS_OUTPUTS_PING_OK: ${{ steps.diagnostics.outputs.ping_ok }}
+          STEPS_DIAGNOSTICS_OUTPUTS_SSH_OK: ${{ steps.diagnostics.outputs.ssh_ok }}
+          # yamllint disable-line rule:line-length
+          STEPS_DIAGNOSTICS_OUTPUTS_BASTION_IP: ${{ steps.diagnostics.outputs.bastion_ip || 'unknown' }}
         run: |
           {
             echo "## Network Connectivity Diagnostics Results"
             echo ""
             echo "### Configuration"
-            echo "- **Bastion IP**: ${{ steps.diagnostics.outputs.bastion_ip || 'unknown' }}"
+            echo "- **Bastion IP**: ${STEPS_DIAGNOSTICS_OUTPUTS_BASTION_IP}"
             echo "- **Bastion Name**: network-test-${RUN_ID}"
             echo ""
             echo "### Test Results"
-            if [[ "${{ steps.diagnostics.outputs.ping_ok }}" == "true" ]]; then
+            if [[ "${STEPS_DIAGNOSTICS_OUTPUTS_PING_OK}" == "true" ]]; then
               echo "- ✅ **Ping**: Success"
             else
               echo "- ❌ **Ping**: Failed"
             fi
 
-            if [[ "${{ steps.diagnostics.outputs.ssh_ok }}" == "true" ]]; then
+            if [[ "${STEPS_DIAGNOSTICS_OUTPUTS_SSH_OK}" == "true" ]]; then
               echo "- ✅ **SSH**: Success"
             else
               echo "- ❌ **SSH**: Failed"
             fi
             echo ""
             echo "### Next Steps"
-            if [[ "${{ steps.diagnostics.outputs.ssh_ok }}" != "true" ]]; then
+            if [[ "${STEPS_DIAGNOSTICS_OUTPUTS_SSH_OK}" != "true" ]]; then
               echo ""
               echo "**SSH connection failed. Check:**"
               echo "1. OpenStack console logs for bastion instance"

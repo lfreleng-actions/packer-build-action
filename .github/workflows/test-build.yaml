@@ -153,9 +153,13 @@ jobs:
         run: |
           {
             echo "## Test Results"
-            echo "**Bastion IP:** ${{ steps.bastion.outputs.bastion_ip }}"
-            echo "**Build Status:** ${{ steps.build.outputs.build_status }}"
-            if [[ -n "${{ steps.build.outputs.image_name }}" ]]; then
-              echo "**Image Name:** ${{ steps.build.outputs.image_name }}"
+            echo "**Bastion IP:** ${STEPS_BASTION_OUTPUTS_BASTION_IP}"
+            echo "**Build Status:** ${STEPS_BUILD_OUTPUTS_BUILD_STATUS}"
+            if [[ -n "${STEPS_BUILD_OUTPUTS_IMAGE_NAME}" ]]; then
+              echo "**Image Name:** ${STEPS_BUILD_OUTPUTS_IMAGE_NAME}"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
+        env:
+          STEPS_BASTION_OUTPUTS_BASTION_IP: ${{ steps.bastion.outputs.bastion_ip }}
+          STEPS_BUILD_OUTPUTS_BUILD_STATUS: ${{ steps.build.outputs.build_status }}
+          STEPS_BUILD_OUTPUTS_IMAGE_NAME: ${{ steps.build.outputs.image_name }}

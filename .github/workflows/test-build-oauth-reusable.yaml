@@ -60,6 +60,7 @@ concurrency:
 
 jobs:
   prepare:
+    name: "Prepare"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -88,6 +89,7 @@ jobs:
               - '.github/workflows/**'
 
   test-packer-build:
+    name: "Test Packer build (OAuth)"
     needs: prepare
     if: |
       needs.prepare.outputs.has-changes == 'true' ||
@@ -170,6 +172,7 @@ jobs:
           openstack_region: ${{ secrets.OPENSTACK_REGION }}
 
   summary:
+    name: "Summary"
     if: always()
     needs: [prepare, test-packer-build]
     runs-on: ubuntu-latest

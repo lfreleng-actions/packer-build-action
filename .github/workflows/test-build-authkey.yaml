@@ -116,6 +116,7 @@ jobs:
               - '.github/workflows/**'
 
   test-packer-build:
+    name: "Test Packer build (auth key)"
     needs: prepare
     if: |
       needs.prepare.outputs.has-changes == 'true' ||
@@ -201,6 +202,7 @@ jobs:
           openstack_region: ${{ secrets.OPENSTACK_REGION }}
 
   summary:
+    name: "Summary"
     # Always run (to summarise results) but only for trusted events and
     # labeled fork PRs; unlabeled fork PRs skip the whole workflow.
     if: >-
