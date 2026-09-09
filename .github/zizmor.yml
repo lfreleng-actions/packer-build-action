@@ -1,0 +1,38 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Linux Foundation
+
+# Configuration for zizmor (https://docs.zizmor.sh).
+
+rules:
+  self-repository:
+    # The audit stays enabled so that any 'uses:' clause able to adopt
+    # GitHub's self-repository ('$/') form is still reported. Only the six
+    # sites with no compliant form are ignored, in two groups.
+    #
+    # 'uses: ./' names the action at the repository root. GitHub documents
+    # the self-repository form as '$/{path}', and the root has no {path};
+    # actionlint rejects a bare '$/' as "invalid format because path is
+    # missing". No compliant spelling exists for these three sites.
+    #
+    # 'uses: ./action-repo' names a directory that an actions/checkout step
+    # creates during the run, not content of this repository. The
+    # self-repository form resolves against the running commit and cannot
+    # see runtime filesystem state, so rewriting it would break the job.
+    # zizmor reclassified these fixes as unsafe in v1.30.1 for this reason
+    # (zizmorcore/zizmor#2367).
+    #
+    # Entries are file-scoped rather than line-scoped. Each file below holds
+    # exactly one workspace-relative clause, so naming the line would add no
+    # precision while breaking on any edit that shifts it. This audit only
+    # ever fires on workspace-relative 'uses:', so a file-scoped entry
+    # cannot mask a finding from any other audit.
+    ignore:
+      # uses: ./
+      - test-build-minimal.yaml
+      - test-build-authkey.yaml
+      - test-build-oauth-reusable.yaml
+      # uses: ./action-repo
+      - test-build.yaml
+      - test-build-floating-ip.yaml
+      - test-validate.yaml
