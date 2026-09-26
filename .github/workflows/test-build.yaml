@@ -13,8 +13,8 @@ on:
       - "action.yaml"
       - "examples/**"
       - ".github/workflows/test-build.yaml"
-  # Deliberately pull_request (not pull_request_target): the job checks out
-  # and runs the code under test, so it must stay unprivileged. Fork PRs
+  # Deliberately pull_request (not pull_request_target): the job runs the
+  # code under test, so it must stay unprivileged. Fork PRs
   # and Dependabot receive no secrets and cannot reach the OpenStack
   # tenant, so the job skips on them. To exercise fork code, push its head
   # to a branch in this repository and raise a pull request from there.
