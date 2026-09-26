@@ -8,3 +8,33 @@ paths:
       # Deliberate test failures
       - 'input "invalid_input" is not defined in action .+'
       - 'missing input "input" which is required by action .+'
+  .github/workflows/test-build-authkey.yaml:
+    ignore:
+      # The fork rejects a bare '$/' (an action at the repository
+      # root), which GitHub accepts and runs.
+      - 'specifying action "\$/" in invalid format because path is missing'
+  .github/workflows/test-build-minimal.yaml:
+    ignore:
+      # The fork rejects a bare '$/' (an action at the repository
+      # root), which GitHub accepts and runs.
+      - 'specifying action "\$/" in invalid format because path is missing'
+  .github/workflows/test-build-oauth-reusable.yaml:
+    ignore:
+      # The fork rejects a bare '$/' (an action at the repository
+      # root), which GitHub accepts and runs.
+      - 'specifying action "\$/" in invalid format because path is missing'
+  .github/workflows/test-build-floating-ip.yaml:
+    ignore:
+      # The fork rejects a bare '$/' (an action at the repository
+      # root), which GitHub accepts and runs.
+      - 'specifying action "\$/" in invalid format because path is missing'
+  .github/workflows/test-build.yaml:
+    ignore:
+      # The fork rejects a bare '$/' (an action at the repository
+      # root), which GitHub accepts and runs.
+      - 'specifying action "\$/" in invalid format because path is missing'
+  .github/workflows/test-validate.yaml:
+    ignore:
+      # The fork rejects a bare '$/' (an action at the repository
+      # root), which GitHub accepts and runs.
+      - 'specifying action "\$/" in invalid format because path is missing'

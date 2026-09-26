@@ -68,12 +68,6 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout packer-build-action
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: action-repo
-          persist-credentials: false
-
       - name: Checkout test repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,7 +79,7 @@ jobs:
 
       - name: Build with Packer (Floating IP mode)
         id: build
-        uses: ./action-repo
+        uses: $/
         with:
           mode: build
           # NO bastion_ip - this forces use_floating_ip=true
