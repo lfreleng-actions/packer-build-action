@@ -151,7 +151,7 @@ jobs:
       # Step 2: Run Packer Build Action
       # ========================================
       - name: Build Packer Image
-        uses: ./
+        uses: $/
         with:
           mode: build
           packer_version: "1.11.2"
