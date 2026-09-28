@@ -29,12 +29,6 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout packer-build-action
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          path: action-repo
-
       - name: Checkout test repository with Packer templates
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,7 +38,7 @@ jobs:
           submodules: recursive
 
       - name: Run Packer validation
-        uses: ./action-repo
+        uses: $/
         with:
           mode: validate
           packer_working_dir: "."

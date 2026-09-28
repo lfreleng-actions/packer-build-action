@@ -12,8 +12,8 @@ on:
       - "action.yaml"
       - "examples/**"
       - ".github/workflows/test-build-floating-ip.yaml"
-  # Deliberately pull_request (not pull_request_target): the job checks out
-  # and runs the code under test, so it must stay unprivileged. Fork PRs
+  # Deliberately pull_request (not pull_request_target): the job runs the
+  # code under test, so it must stay unprivileged. Fork PRs
   # and Dependabot receive no secrets and cannot reach the OpenStack
   # tenant, so the job skips on them. To exercise fork code, push its head
   # to a branch in this repository and raise a pull request from there.
@@ -68,12 +68,6 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout packer-build-action
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: action-repo
-          persist-credentials: false
-
       - name: Checkout test repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,7 +79,7 @@ jobs:
 
       - name: Build with Packer (Floating IP mode)
         id: build
-        uses: ./action-repo
+        uses: $/
         with:
           mode: build
           # NO bastion_ip - this forces use_floating_ip=true
