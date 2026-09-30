@@ -141,6 +141,12 @@ intermittently with a `403`. Packer reads public repositories here, so the
 default workflow token suffices even when the caller grants it no
 permissions.
 
+A failed `packer init` fails the action at the plugin initialisation step,
+with Packer's own error. Every plugin in a template's `required_plugins`
+must resolve, even in build mode where the action selects a single source,
+because Packer refuses to build while any required plugin is missing.
+Remove plugins the template does not use from `required_plugins`.
+
 ## Outputs
 
 | Output              | Description                   |
