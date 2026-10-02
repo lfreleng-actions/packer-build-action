@@ -348,11 +348,13 @@ runs:
 
         TEMPLATE="$PACKER_TEMPLATE"
         if [[ -n "$TEMPLATE" ]]; then
-          # Extract template name for selective plugin initialization
           TEMPLATE_NAME=$(basename "$TEMPLATE" .pkr.hcl)
           echo "Initializing plugins for OpenStack source: $TEMPLATE_NAME..."
-          # Use -upgrade to ensure plugins are installed
-          packer init -upgrade "$TEMPLATE" || true
+          # Use -upgrade to ensure plugins are installed. A failure must
+          # fail this step: Packer requires every required_plugins entry
+          # even when -only= selects a single source, so tolerating it
+          # only defers the error to a bare "Missing plugins" later.
+          packer init -upgrade "$TEMPLATE"
         else
           # Init all templates if no specific template provided.
           # -print0 with a null-delimited read keeps paths containing
@@ -377,8 +379,9 @@ runs:
         BASTION_IP: ${{ inputs.bastion_ip }}
         BASTION_SSH_USER: ${{ inputs.bastion_ssh_user }}
         ACTION_PATH: ${{ github.action_path }}
-        # build-packer.sh and validate-packer.sh both run `packer init`
-        # themselves, so they need the same authentication as the step above.
+        # validate-packer.sh runs `packer init` itself, so validate mode
+        # needs the same authentication as the step above. Build mode
+        # relies on that step and does not initialise again.
         PACKER_GITHUB_API_TOKEN: ${{ inputs.github_token }}
       run: |
         set -euo pipefail

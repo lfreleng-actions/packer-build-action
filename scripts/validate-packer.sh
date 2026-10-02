@@ -62,12 +62,15 @@ echo ""
 for template in "${TEMPLATES[@]}"; do
     echo "Validating: $template"
 
-    # Initialize Packer
+    # Initialize Packer. Keep the output so a failure can show why;
+    # running init again to reproduce it would repeat the plugin
+    # lookups that may have failed on a rate limit in the first place.
     echo "  Initializing..."
-    if packer init "$template" > /dev/null 2>&1; then
+    if init_output=$(packer init "$template" 2>&1); then
         echo -e "  ${GREEN}✓${NC} Init successful"
     else
         echo -e "  ${RED}✗${NC} Init failed"
+        printf '%s\n' "$init_output"
         FAILED=$((FAILED + 1))
         continue
     fi
