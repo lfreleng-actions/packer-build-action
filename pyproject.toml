@@ -45,38 +45,13 @@ python_functions = ["test_*"]
 # consists of shell scripts and YAML configurations.
 # Tests validate action configurations, workflows, and script syntax.
 
-[tool.pyright]
+[tool.basedpyright]
+# Lowest supported version, per requires-python
 pythonVersion = "3.11"
-include = ["scripts", "tests"]
-exclude = [
-    "build/",
-    "dist/",
-    "docs/",
-    ".venv/",
-    ".mypy_cache/",
-    ".pytest_cache/",
-    ".ruff_cache/",
-    "htmlcov/",
-]
+pythonPlatform = "All"
 typeCheckingMode = "strict"
-reportMissingImports = "none"
-reportMissingTypeStubs = "none"
-reportUnknownParameterType = "none"
-reportUnknownArgumentType = "none"
-reportUnknownLambdaType = "none"
-reportUnknownVariableType = "none"
-reportUnknownMemberType = "none"
-reportPrivateUsage = "none"
-reportUnusedFunction = "none"
-reportUnusedVariable = "none"
-reportUnusedImport = "none"
-reportUnusedCallResult = "none"
-reportConstantRedefinition = "none"
-reportUnusedClass = "none"
-reportUntypedClassDecorator = "none"
-reportUnnecessaryIsInstance = "none"
-reportPossiblyUnboundVariable = "warning"
-reportMissingParameterType = "warning"
+# Same directories the pre-commit hook passes, so editor and bare runs match
+include = ["scripts", "tests"]
 
 # Pin the ruff rule set explicitly.
 #
