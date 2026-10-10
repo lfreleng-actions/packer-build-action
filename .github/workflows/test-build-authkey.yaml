@@ -132,7 +132,7 @@ jobs:
       # ========================================
       - name: Setup OpenStack Bastion with Tailscale (Auth Key)
         id: bastion
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@c60c23164c9490d6031308e618e6c6c98a50509d # v0.1.2
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@657e5ba80b2fe6706c7353a6a703a42c8fd23412 # v0.1.3
         with:
           operation: setup
           tailscale_auth_key: ${{ secrets.TAILSCALE_AUTH_KEY }}
@@ -173,7 +173,7 @@ jobs:
       # ========================================
       - name: Teardown Bastion Host
         if: always()
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@c60c23164c9490d6031308e618e6c6c98a50509d # v0.1.2
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@657e5ba80b2fe6706c7353a6a703a42c8fd23412 # v0.1.3
         with:
           operation: teardown
           bastion_name: "packer-authkey-${{ github.run_id }}"
