@@ -118,7 +118,7 @@ jobs:
       # ========================================
       - name: Setup OpenStack Bastion with Tailscale (OAuth Reusable)
         id: bastion
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@657e5ba80b2fe6706c7353a6a703a42c8fd23412 # v0.1.3
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@d8fd809044de3723ad051b42ac8db490d71d6e25 # v0.1.4
         with:
           operation: setup
           tailscale_oauth_client_id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -161,7 +161,7 @@ jobs:
       # ========================================
       - name: Teardown Bastion Host
         if: always()
-        uses: lfreleng-actions/tailscale-openstack-bastion-action@657e5ba80b2fe6706c7353a6a703a42c8fd23412 # v0.1.3
+        uses: lfreleng-actions/tailscale-openstack-bastion-action@d8fd809044de3723ad051b42ac8db490d71d6e25 # v0.1.4
         with:
           operation: teardown
           bastion_name: "packer-oauth-reuse-${{ github.run_id }}"
