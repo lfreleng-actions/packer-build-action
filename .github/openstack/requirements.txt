@@ -543,9 +543,9 @@ python-keystoneclient==6.0.0 \
 python-manilaclient==6.3.0 \
     --hash=sha256:92d73667a1ac20ab083588e8912b59769be0706f20fb6e9845ec06d3d72723d4 \
     --hash=sha256:d2ecbf96ffa95c1f6ba306cab969a15666d4516576334dbdf3c67baccdfbf0c6
-python-openstackclient==10.4.0 \
-    --hash=sha256:337fdf39f140a1f38e1e7c74227835ae70df698e3237a65187dc1f8bf70c096d \
-    --hash=sha256:503ae315fd4537d799026f4d05c7d5978946076451430d5852aae62c3d1033f1
+python-openstackclient==10.5.0 \
+    --hash=sha256:a31f7dfa25650bea045df42f3301677b344f2dd6cf9193d2531fe2725132685b \
+    --hash=sha256:a9c77b8d2b53a9413794daa5d60cbb4fa669af64799b704cfb96d75f2e002e8e
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
     --hash=sha256:0150219816b6a1fa26fb4699fb7daa9caf09eb1999f3b70fb6e786805e80375a \
