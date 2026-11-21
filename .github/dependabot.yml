@@ -16,6 +16,11 @@ updates:
     # time for a bad release to be yanked before we adopt it.
     cooldown:
       default-days: 7
+      # Our own organisation's actions and reusable workflows skip the
+      # cooldown: we review those releases ourselves, and their fixes
+      # need to reach callers without a week's delay.
+      exclude:
+        - "lfreleng-actions/*"
     open-pull-requests-limit: 15
 
   # The hash-pinned locks cannot pick up fixes on their own; Dependabot
