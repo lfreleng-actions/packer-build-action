@@ -19,9 +19,13 @@ concurrency:
 
 jobs:
   test-validate:
-    name: Test Validation Mode
+    name: ${{ matrix.hide-jq && 'Test Validation Mode (without jq)' || 'Test Validation Mode' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        hide-jq: [false, true]
 
     steps:
       - name: Harden the runner
@@ -37,6 +41,30 @@ jobs:
           path: target-repo
           submodules: recursive
 
+      - name: Prepare missing jq and HTTP apt sources
+        if: matrix.hide-jq
+        shell: bash
+        run: |
+          sudo mv /usr/bin/jq "$RUNNER_TEMP/packer-build-jq"
+          # APT still sees jq as installed after the binary is moved.
+          echo 'APT::Get::ReInstall "true";' \
+            | sudo tee /etc/apt/apt.conf.d/99-packer-build-jq-reinstall > /dev/null
+          # Hosted Ubuntu can keep its mirror URLs outside ubuntu.sources.
+          ubuntu_sources=/etc/apt/sources.list.d/ubuntu.sources
+          mirror_list=/etc/apt/apt-mirrors.txt
+          if grep -Eq '^URIs:.*[[:blank:]]mirror\+file:/etc/apt/apt-mirrors\.txt([[:blank:]]|$)' \
+            "$ubuntu_sources"; then
+            sudo sed -i 's|^https://|http://|' "$mirror_list"
+            grep -q '^http://' "$mirror_list"
+          else
+            sudo sed -i '/^URIs:/s|https://|http://|g' "$ubuntu_sources"
+            grep -Eq '^URIs:.*http://' "$ubuntu_sources"
+          fi
+          if command -v jq; then
+            echo "::error::Another jq binary is on PATH"
+            exit 1
+          fi
+
       - name: Run Packer validation
         uses: $/
         with:
@@ -45,6 +73,35 @@ jobs:
           path_prefix: "target-repo"
           packer_version: "1.11.2"
           python_version: "3.11"
+          apt_http_fallback_override: ${{ vars.APT_HTTP_FALLBACK }}
+
+      - name: Verify jq installation and HTTPS sources
+        if: matrix.hide-jq
+        shell: bash
+        run: |
+          /usr/bin/jq --version
+          shopt -s nullglob
+          sources=(/etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources)
+          for source in /etc/apt/sources.list /etc/apt/apt-mirrors.txt; do
+            if [[ -f "$source" ]]; then
+              sources+=("$source")
+            fi
+          done
+          test "${#sources[@]}" -gt 0
+          if grep -Eq '^[^#]*http://' "${sources[@]}"; then
+            echo "::error::APT sources still contain HTTP URLs"
+            exit 1
+          else
+            test "$?" -eq 1
+          fi
+
+      - name: Restore jq
+        if: always() && matrix.hide-jq
+        run: |
+          sudo rm -f /etc/apt/apt.conf.d/99-packer-build-jq-reinstall
+          if [[ -f "$RUNNER_TEMP/packer-build-jq" ]]; then
+            sudo mv "$RUNNER_TEMP/packer-build-jq" /usr/bin/jq
+          fi
 
       - name: Summary
         if: always()

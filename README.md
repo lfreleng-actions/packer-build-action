@@ -134,6 +134,16 @@ jobs:
 | `bastion_ssh_user`   | SSH user for bastion      | `ubuntu`              |
 | `github_token`       | Token for plugin fetches  | `${{ github.token }}` |
 
+On Linux, if `jq` is missing, the action switches the runner's apt sources
+to HTTPS for the rest of the caller's job before installing `jq`. If `jq` is
+already on `PATH`, the action leaves apt sources alone.
+
+The action passes the optional `apt_http_fallback_override` input to
+`apt-https-enforce-action`. It defaults to `''`. To allow emergency HTTP
+fallback if the HTTPS update fails, pass
+`apt_http_fallback_override: ${{ vars.APT_HTTP_FALLBACK }}` and set
+`APT_HTTP_FALLBACK` to `true`.
+
 `github_token` authenticates the GitHub API calls Packer makes when it
 resolves plugins during `packer init`. GitHub caps unauthenticated calls at
 60 an hour per runner egress IP, which makes plugin resolution fail

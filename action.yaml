@@ -106,6 +106,13 @@ inputs:
     required: false
     default: "3.11"
 
+  apt_http_fallback_override:
+    description: >-
+      Emergency HTTP fallback for apt, passed to apt-https-enforce-action;
+      wire it to vars.APT_HTTP_FALLBACK
+    required: false
+    default: ""
+
   # Plugin Retrieval
   github_token:
     # yamllint disable-line rule:line-length
@@ -130,7 +137,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Validate inputs and install dependencies
+    - name: Validate inputs
       shell: bash
       env:
         MODE: ${{ inputs.mode }}
@@ -180,14 +187,27 @@ runs:
           esac
         fi
 
-        # Install jq if not available (needed for cloud-env.json generation)
-        if ! command -v jq &> /dev/null; then
-          echo "📦 Installing jq..."
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq jq
+        echo "✅ Input validation passed"
+
+    - name: Check for jq
+      id: check-jq
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if ! command -v jq > /dev/null; then
+          echo "missing=true" >> "$GITHUB_OUTPUT"
         fi
 
-        echo "✅ Input validation passed"
+    - name: Enforce HTTPS for apt
+      if: runner.os == 'Linux' && steps.check-jq.outputs.missing == 'true'
+      uses: lfreleng-actions/apt-https-enforce-action@107838afeb79d37aeddb2b7f227f80f51df25180  # v0.0.1
+      with:
+        http_fallback_override: ${{ inputs.apt_http_fallback_override }}
+
+    - name: Install jq
+      if: runner.os == 'Linux' && steps.check-jq.outputs.missing == 'true'
+      shell: bash
+      run: sudo apt-get install -y -qq jq
 
     - name: Setup Python
       uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
